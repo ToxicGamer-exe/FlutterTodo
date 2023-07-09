@@ -10,12 +10,22 @@ import 'package:todo_app/types.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await ColorProvider().init();
-  await TodoProvider().init();
 
   runApp(MultiProvider(providers: [
-    ChangeNotifierProvider(create: (context) => ColorProvider()),
-    ChangeNotifierProvider(create: (context) => TodoProvider()),
+    ChangeNotifierProvider<ColorProvider>(
+      create: (context) {
+        final colorProvider = ColorProvider();
+        colorProvider.init();
+        return colorProvider;
+      },
+    ),
+    ChangeNotifierProvider<TodoProvider>(
+      create: (context) {
+        final todoProvider = TodoProvider();
+        todoProvider.init();
+        return todoProvider;
+      },
+    ),
   ], child: const MyApp()));
 }
 
@@ -197,7 +207,6 @@ class _MyHomePageState extends State<MyHomePage> {
                 title: Text(TodoProvider().todoColls[i].name),
                 onTap: () {
                   //change the state of the app to show todos in currently selected collection
-                  log(TodoProvider().todoColls[i].name);
                     Provider.of<providers.TodoProvider>(context, listen: false)
                         .setCurrentTodoColl(TodoProvider().todoColls[i].name);
                   setState(() {

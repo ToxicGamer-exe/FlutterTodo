@@ -62,20 +62,16 @@ class TodoProvider extends ChangeNotifier {
   set currentColor(Color color) => setColor(color);
 
   void setCurrentTodoColl(String? collName) {
-    log('setTodoColl: $collName');
     _currentTodoColl = collName;
-    log('setTodoColl: $currentTodoColl');
     notifyListeners();
   }
 
 
   TodoColl? getTodoColl(String? collName) {
-    log('getTodoColl: $collName');
     return todoColls.firstWhereOrNull((coll) => coll.name == collName);
   }
-  
+
   TodoColl? getCurrentTodoColl() {
-    log('getCurrentTodoColl: $currentTodoColl');
     return getTodoColl(currentTodoColl);
   }
 
