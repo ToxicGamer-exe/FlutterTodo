@@ -1,5 +1,10 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:collection/collection.dart';
+
+import 'types.dart';
 
 class ColorProvider extends ChangeNotifier {
   Color _currentColor = Colors.green;
@@ -20,28 +25,58 @@ class ColorProvider extends ChangeNotifier {
   }
 }
 
-class SettingsProvider extends ChangeNotifier {
+class TodoProvider extends ChangeNotifier {
+  List<TodoColl> todoColls = [
+    TodoColl(name: 'School', settings: Settings(color: Colors.blue), todos: [
+      const Todo(
+        title: 'Do homework',
+        description: 'Do homework for math',
+      ),
+      const Todo(
+        title: 'Do homework',
+        description: 'Do homework for math',
+      ),
+      const Todo(
+        title: 'Do homework',
+        description: 'Do homework for math',
+      ),
+    ]),
+  ];
+
   Future<void> init() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    _currentTodoList = prefs.getInt('currentTodoList') ?? 0;
-    _showCompleted = prefs.getBool('showCompleted') ?? false;
+    _currentTodoColl = prefs.getString('currentTodoColl');
+    _showCompleted = prefs.getBool('showCompleted') ?? false; //This should be in some global settings
     _currentColor = Color(prefs.getInt('color') ?? 0xFF00FF00);
   }
 
-  int _currentTodoList = 0;
+  String? _currentTodoColl;
   bool _showCompleted = false;
   Color _currentColor = Colors.green;
 
-  int get currentTodoList => _currentTodoList;
-  set currentTodoList(int listId) => setCurrentTodoList(listId);
+  String? get currentTodoColl => _currentTodoColl;
+  set currentTodoColl(String? collName) => setCurrentTodoColl(collName);
   bool get showCompleted => _showCompleted;
   set showCompleted(bool showCompleted) => setShowCompleted(showCompleted);
   Color get currentColor => _currentColor;
   set currentColor(Color color) => setColor(color);
 
-  Future<void> setCurrentTodoList(int listId) async {
-    _currentTodoList = listId;
+  void setCurrentTodoColl(String? collName) {
+    log('setTodoColl: $collName');
+    _currentTodoColl = collName;
+    log('setTodoColl: $currentTodoColl');
     notifyListeners();
+  }
+
+
+  TodoColl? getTodoColl(String? collName) {
+    log('getTodoColl: $collName');
+    return todoColls.firstWhereOrNull((coll) => coll.name == collName);
+  }
+  
+  TodoColl? getCurrentTodoColl() {
+    log('getCurrentTodoColl: $currentTodoColl');
+    return getTodoColl(currentTodoColl);
   }
 
   //TODO: Update this to update only the current list instead the whole app

@@ -1,19 +1,21 @@
 import 'dart:convert';
-
+import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:todo_app/providers.dart';
 import 'package:todo_app/settings.dart';
 import 'package:todo_app/providers.dart' as providers;
 import 'package:provider/provider.dart';
+import 'package:todo_app/types.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  ColorProvider colorProvider = ColorProvider();
-  await colorProvider.init();
+  await ColorProvider().init();
+  await TodoProvider().init();
 
   runApp(MultiProvider(providers: [
-    ChangeNotifierProvider.value(value: colorProvider),
+    ChangeNotifierProvider(create: (context) => ColorProvider()),
+    ChangeNotifierProvider(create: (context) => TodoProvider()),
   ], child: const MyApp()));
 }
 
@@ -53,51 +55,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class TodoColl {
-  TodoColl({
-    required this.id,
-    required this.title,
-    this.color,
-    this.todos = const [],
-  });
-
-  final String id;
-  final String title;
-  final Color? color;
-  List<Todo>? todos; //TODO: make this default to []
-
-  static TodoColl fromJson(String e) {
-    final json = jsonDecode(e);
-    return TodoColl(
-      id: json['id'],
-      title: json['title'],
-      color: json['color'] != null ? Color(json['color']) : Colors.green,
-      todos: (json['todos'] as List).map((e) => Todo.fromJson(e)).toList(),
-    );
-  }
-}
-
-class Todo {
-  const Todo({
-    required this.title,
-    required this.description,
-    this.isDone = false,
-  });
-
-  final String title;
-  final String description;
-  final bool isDone;
-
-  static Todo fromJson(String e) {
-    final json = jsonDecode(e);
-    return Todo(
-      title: json['title'],
-      description: json['description'],
-      isDone: json['isDone'] ?? false,
-    );
-  }
-}
-
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title});
 
@@ -117,46 +74,50 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  @override
-  List<TodoColl> todoColls = [
-    // const Todo(
-    //   title: 'Buy milk',
-    //   description: 'Go to the store and buy milk',
-    // ),
-    // const Todo(
-    //   title: 'Buy eggs',
-    //   description: 'Go to the store and buy eggs',
-    // ),
-    // const Todo(
-    //   title: 'Buy bread',
-    //   description: 'Go to the store and buy bread',
-    // ),
-  ];
+  TodoColl? currentTodoColl;
+  List<Todo> todos = [];
 
   @override
-  void initState() async {
+  void initState() {
     super.initState();
+    loadData();
+  }
+
+  void loadData() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     List<String>? todosString = prefs.getStringList('todoColls');
     if (todosString != null) {
       setState(() {
-        todoColls = todosString.map((e) => TodoColl.fromJson(e)).toList();
+        TodoProvider().todoColls =
+            Provider.of<TodoProvider>(context, listen: false).todoColls =
+            todosString
+                .map((e) => TodoColl.fromJson(jsonDecode(e)))
+                .toList();
+        currentTodoColl = TodoProvider().getCurrentTodoColl();
+        todos = currentTodoColl?.todos ?? [];
       });
     }
   }
 
-
-  //TODO: Save it with shared preferences
-  void _addTodo(int collId, String title, String description) {
+  void _addTodo(String collName, String title, String description) async {
+    TodoColl coll =
+        TodoProvider().todoColls.firstWhere((coll) => coll.name == collName);
+    SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
-      todoColls[collId].todos = [
-        ...?todoColls[collId].todos,
+      coll.todos = [
+        ...?coll.todos,
         Todo(
           title: title,
           description: description,
         ),
       ];
     });
+
+    //TODO: This needs some optimalization man... I can't save all the collections just because I added one todo xD
+    prefs.setStringList(
+      'todoColls',
+      TodoProvider().todoColls.map((e) => jsonEncode(e)).toList(),
+    );
   }
 
   void _showAddDialog() {
@@ -198,7 +159,7 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             TextButton(
               onPressed: () {
-                _addTodo(title, description);
+                _addTodo('School', title, description);
                 Navigator.of(context).pop();
               },
               child: const Text('Add'),
@@ -230,20 +191,31 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               child: const Text('Todos'),
             ),
-            ListTile(
-              title: const Text('School'),
-              onTap: () {
-                // Update the state of the app.
-                // ...
-              },
-            ),
-            ListTile(
-              title: const Text('Work'),
-              onTap: () {
-                // Update the state of the app.
-                // ...
-              },
-            ),
+            //TODO: Decide whether to show it on a separate page or just change the state
+            for (int i = 0; i < TodoProvider().todoColls.length; i++)
+              ListTile(
+                title: Text(TodoProvider().todoColls[i].name),
+                onTap: () {
+                  //change the state of the app to show todos in currently selected collection
+                  log(TodoProvider().todoColls[i].name);
+                    Provider.of<providers.TodoProvider>(context, listen: false)
+                        .setCurrentTodoColl(TodoProvider().todoColls[i].name);
+                  setState(() {
+                    currentTodoColl = Provider.of<providers.TodoProvider>(context, listen: false).getCurrentTodoColl();
+                    todos = currentTodoColl?.todos ?? [];
+                  });
+                  // Navigator.pop(context);
+                  // Navigator.push(
+                  //   context,
+                  //   MaterialPageRoute(
+                  //     builder: (context) => TodoCollPage(
+                  //       todoColl: todoColls[i],
+                  //       index: i,
+                  //     ),
+                  //   ),
+                  // );
+                },
+              ),
           ],
         ),
       ),
@@ -258,7 +230,7 @@ class _MyHomePageState extends State<MyHomePage> {
               Provider.of<providers.ColorProvider>(context).currentColor,
           title: Text(widget.title),
           centerTitle: true,
-          actions: [
+          actions: currentTodoColl == null ? [] : [
             IconButton(
               icon: const Icon(Icons.settings),
               onPressed: () {
@@ -287,90 +259,74 @@ class _MyHomePageState extends State<MyHomePage> {
           // action in the IDE, or press "p" in the console), to see the
           // wireframe for each widget.
           mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            ListView.separated(
-              shrinkWrap: true,
-              itemCount: todos.length,
-              itemBuilder: (context, index) {
-                final todo = todos[index];
-                return ListTile(
-                  title: Row(children: [
-                    Checkbox(value: todo.isDone, onChanged: (checked) => setState(() {
-                      todos[index] = Todo(
-                        title: todo.title,
-                        description: todo.description,
-                        isDone: checked ?? false,
+
+          children: currentTodoColl == null ? [const Center(child: Text('Please select collection!'))] :
+          todos.isEmpty
+              ? [const Center(child: Text('No todos yet!'))]
+              : <Widget>[
+                  ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: todos.length,
+                    itemBuilder: (context, index) {
+                      final todo = todos[index];
+                      return ListTile(
+                        title: Row(children: [
+                          Checkbox(
+                              value: todo.isDone,
+                              onChanged: (checked) => setState(() {
+                                    todos[index] = Todo(
+                                      title: todo.title,
+                                      description: todo.description,
+                                      isDone: checked ?? false,
+                                    );
+                                  })),
+                          Text(todo.title)
+                        ]),
+                        subtitle: Text(todo.description),
                       );
-                    })
-                    ),
-                    Text(todo.title)
-                  ]),
-                  subtitle: Text(todo.description),
-                );
-              },
-              separatorBuilder: (context, index) => const Divider(),
-            ),
-            const SizedBox(height: 40),
-            Expanded(
-                child: ListView.builder(
-              itemCount: todos.length,
-              itemBuilder: (context, index) {
-                final todo = todos[index];
-                return ListTile(
-                  title: Row(children: [
-                    Checkbox(value: todo.isDone, onChanged: (checked) => setState(() {
-                      todos[index] = Todo(
-                        title: todo.title,
-                        description: todo.description,
-                        isDone: checked ?? false,
+                    },
+                    separatorBuilder: (context, index) => const Divider(),
+                  ),
+                  const SizedBox(height: 40),
+                  Expanded(
+                      child: ListView.builder(
+                    itemCount: todos.length,
+                    itemBuilder: (context, index) {
+                      final todo = todos[index];
+                      return ListTile(
+                        title: Row(children: [
+                          Checkbox(
+                              value: todo.isDone,
+                              onChanged: (checked) => setState(() {
+                                    todos[index] = Todo(
+                                      title: todo.title,
+                                      description: todo.description,
+                                      isDone: checked ?? false,
+                                    );
+                                  })),
+                          Text(todo.title)
+                        ]),
+                        subtitle: Text(todo.description),
                       );
-                    })
-                    ),
-                    Text(todo.title)
-                  ]),
-                  subtitle: Text(todo.description),
-                );
-              },
-            ))
-            // const Text(
-            //   'You have clicked the button this many times:',
-            // ),
-            // Text(
-            //   '$_counter',
-            //   style: Theme.of(context).textTheme.headlineMedium,
-            // ),
-          ],
+                    },
+                  ))
+                  // const Text(
+                  //   'You have clicked the button this many times:',
+                  // ),
+                  // Text(
+                  //   '$_counter',
+                  //   style: Theme.of(context).textTheme.headlineMedium,
+                  // ),
+                ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddDialog,
-        tooltip: 'Add',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+      floatingActionButton: currentTodoColl == null
+          ? null
+          : FloatingActionButton(
+              onPressed: _showAddDialog,
+              tooltip: 'Add',
+              child: const Icon(Icons.add),
+            ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
-
-// class TodoList extends StatelessWidget {
-//   const TodoList({super.key});
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     return ListView(
-//       children: [
-//         const TodoItem(
-//           title: 'Buy milk',
-//           description: 'Go to the store and buy milk',
-//         ),
-//         const TodoItem(
-//           title: 'Buy eggs',
-//           description: 'Go to the store and buy eggs',
-//         ),
-//         const TodoItem(
-//           title: 'Buy bread',
-//           description: 'Go to the store and buy bread',
-//         ),
-//       ],
-//     );
-//   }
-// }
